@@ -81,19 +81,24 @@ Path("checkpoints").mkdir(parents=True, exist_ok=True)
 ###############################################################################
 # Load data
 ###############################################################################
-print(f"Target market {args.tgt_market}")
-train_file = os.path.join(args.data_dir, args.tgt_market, args.train_file)
+src_market_list = args.src_markets.split('-')
+src_files = []
+
+print(f"Target market: {args.tgt_market}")
+print(f"Source markets: {src_market_list}")
+tgt_file = os.path.join(args.data_dir, args.tgt_market, args.train_file)
+for src_maket in src_market_list:
+    src_files.append(os.path.join(args.data_dir, src_maket, args.train_file))
 run_valid_file = os.path.join(args.data_dir, args.tgt_market, args.valid_file)
 run_test_file = os.path.join(args.data_dir, args.tgt_market, args.test_file)
 
-id_index_bank = load_n_items(train_file, run_valid_file)
-
+id_index_bank = load_n_items(tgt_file, run_valid_file, src_files=src_files)
 
 valid_qrel = read_qrel_file(
     os.path.join(args.data_dir, args.tgt_market, args.valid_qrel), id_index_bank
 )
 
-train_data = MarketTrainDataset(train_file, id_index_bank)
+train_data = MarketTrainDataset(tgt_file, id_index_bank, src_files=src_files)
 train_loader = torch.utils.data.DataLoader(
     train_data,
     batch_size=args.batch_size,
@@ -101,7 +106,7 @@ train_loader = torch.utils.data.DataLoader(
     collate_fn=train_batch_collate,
 )
 
-val_data = MarketRunDataset(train_data, run_valid_file, id_index_bank,)
+val_data = MarketRunDataset(train_data, run_valid_file, id_index_bank)
 val_loader = torch.utils.data.DataLoader(
     val_data, batch_size=args.batch_size, shuffle=False, collate_fn=run_batch_collate
 )
@@ -110,7 +115,6 @@ test_data = MarketRunDataset(train_data, run_test_file, id_index_bank,)
 test_loader = torch.utils.data.DataLoader(
     test_data, batch_size=args.batch_size, shuffle=False, collate_fn=run_batch_collate
 )
-
 
 ###############################################################################
 # Build the model

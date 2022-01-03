@@ -12,11 +12,17 @@ from scipy.sparse import (random,
 from tqdm import tqdm
 
 
-def load_n_items(train_file, run_valid_file):
+def load_n_items(tgt_file, run_valid_file, src_files=None):
     id_index_bank = Central_ID_Bank()
-    train_data = pd.read_csv(train_file, sep="\t")
-    for item_id in train_data["itemId"]:
+    tgt_data = pd.read_csv(tgt_file, sep="\t")
+    for item_id in tgt_data["itemId"]:
         id_index_bank.query_item_index(item_id)
+
+    if src_files is not None:
+        for src_file in src_files:
+            src_data = pd.read_csv(src_file, sep="\t")
+            for item_id in src_data["itemId"]:
+                id_index_bank.query_item_index(item_id)
 
     run_files = [run_valid_file]
     for run_file in run_files:
@@ -70,9 +76,12 @@ class Central_ID_Bank(object):
 
 
 class MarketTrainDataset(Dataset):
-    def __init__(self, train_file, id_index_bank) -> None:
+    def __init__(self, tgt_file, id_index_bank, src_files=None) -> None:
         self.id_index_bank = id_index_bank
-        self.ratings = pd.read_csv(train_file, sep="\t")
+        self.ratings = pd.read_csv(tgt_file, sep="\t")
+        if src_files is not None:
+            for src_file in src_files:
+                self.ratings = self.ratings.append(pd.read_csv(src_file, sep="\t"))
 
         # replace ids with corrosponding index for both users and items
         self.ratings["userId"] = self.ratings["userId"].apply(
