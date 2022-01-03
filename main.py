@@ -33,7 +33,7 @@ def create_arg_parser():
     # DATA  Arguments
     parser.add_argument('--data_dir', help='dataset directory', type=str, default='DATA/')
     parser.add_argument('--tgt_market', help='specify a target market name', type=str, default='t1') 
-    parser.add_argument('--src_markets', help='specify none ("none") or a few source markets ("-" seperated) to augment the data for training', type=str, default='s1-s2') 
+    parser.add_argument('--src_markets', help='specify none ("") or a few source markets ("-" seperated) to augment the data for training', type=str, default='') 
     
     parser.add_argument('--valid_file', help='specify validation run file for target market', type=str, default='valid_run.tsv')
     parser.add_argument('--test_file', help='specify test run file for target market', type=str, default='test_run.tsv') 
@@ -58,7 +58,7 @@ def create_arg_parser():
                         help='random seed')
     parser.add_argument('--cuda', action='store_true',
                         help='use CUDA')
-    parser.add_argument('--log-interval', type=int, default=100, metavar='N',
+    parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='report interval')
     parser.add_argument('--save', type=str, default='model.pt',
                         help='path to save the final model')
@@ -81,14 +81,19 @@ Path("checkpoints").mkdir(parents=True, exist_ok=True)
 ###############################################################################
 # Load data
 ###############################################################################
-src_market_list = args.src_markets.split('-')
-src_files = []
+if args.src_markets == "":
+    src_market_list = []
+    src_files = None
+else:
+    src_market_list = args.src_markets.split('-')
+    src_files = []
+    for src_maket in src_market_list:
+        src_files.append(os.path.join(args.data_dir, src_maket, args.train_file))
 
 print(f"Target market: {args.tgt_market}")
 print(f"Source markets: {src_market_list}")
 tgt_file = os.path.join(args.data_dir, args.tgt_market, args.train_file)
-for src_maket in src_market_list:
-    src_files.append(os.path.join(args.data_dir, src_maket, args.train_file))
+
 run_valid_file = os.path.join(args.data_dir, args.tgt_market, args.valid_file)
 run_test_file = os.path.join(args.data_dir, args.tgt_market, args.test_file)
 
@@ -156,9 +161,6 @@ def train():
         update_count += 1
 
     return train_loss
-
-
-import time
 
 
 def evaluate():
