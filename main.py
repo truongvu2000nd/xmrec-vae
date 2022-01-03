@@ -28,12 +28,13 @@ from src.utils import (
 # fmt: off
 def create_arg_parser():
     """Create argument parser for our baseline. """
-    parser = argparse.ArgumentParser('GMFbaseline')
+    parser = argparse.ArgumentParser('VAE')
     
     # DATA  Arguments
     parser.add_argument('--data_dir', help='dataset directory', type=str, default='DATA/')
     parser.add_argument('--tgt_market', help='specify a target market name', type=str, default='t1') 
     parser.add_argument('--src_markets', help='specify none ("") or a few source markets ("-" seperated) to augment the data for training', type=str, default='') 
+    parser.add_argument('--use_processed_data', action='store_true', help='in exp')
     
     parser.add_argument('--valid_file', help='specify validation run file for target market', type=str, default='valid_run.tsv')
     parser.add_argument('--test_file', help='specify test run file for target market', type=str, default='test_run.tsv') 
@@ -88,7 +89,10 @@ else:
     src_market_list = args.src_markets.split('-')
     src_files = []
     for src_maket in src_market_list:
-        src_files.append(os.path.join(args.data_dir, src_maket, args.train_file))
+        if args.use_processed_data:
+            src_files.append(os.path.join(args.data_dir, src_maket, f"train_5core_{args.tgt_market}.tsv"))
+        else:
+            src_files.append(os.path.join(args.data_dir, src_maket, args.train_file))
 
 print(f"Target market: {args.tgt_market}")
 print(f"Source markets: {src_market_list}")
@@ -127,91 +131,91 @@ print(train_data.data.shape)
 # Build the model
 ###############################################################################
 
-n_items = train_data.n_items
-update_count = 0
+# n_items = train_data.n_items
+# update_count = 0
 
-p_dims = [200, 600, n_items]
-model = models.MultiVAE(p_dims).to(device)
+# p_dims = [200, 600, n_items]
+# model = models.MultiVAE(p_dims).to(device)
 
-optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
-criterion = models.loss_function
+# optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
+# criterion = models.loss_function
 
-###############################################################################
-# Training code
-###############################################################################
-def train():
-    # Turn on training mode
-    model.train()
-    train_loss = 0.0
-    global update_count
+# ###############################################################################
+# # Training code
+# ###############################################################################
+# def train():
+#     # Turn on training mode
+#     model.train()
+#     train_loss = 0.0
+#     global update_count
 
-    for train_data in train_loader:
-        train_data = train_data.to(device)
-        if args.total_anneal_steps > 0:
-            anneal = min(args.anneal_cap, 1.0 * update_count / args.total_anneal_steps)
-        else:
-            anneal = args.anneal_cap
+#     for train_data in train_loader:
+#         train_data = train_data.to(device)
+#         if args.total_anneal_steps > 0:
+#             anneal = min(args.anneal_cap, 1.0 * update_count / args.total_anneal_steps)
+#         else:
+#             anneal = args.anneal_cap
 
-        optimizer.zero_grad()
-        recon_batch, mu, logvar = model(train_data)
+#         optimizer.zero_grad()
+#         recon_batch, mu, logvar = model(train_data)
 
-        loss = criterion(recon_batch, train_data, mu, logvar, anneal)
-        loss.backward()
-        train_loss += loss.item()
-        optimizer.step()
+#         loss = criterion(recon_batch, train_data, mu, logvar, anneal)
+#         loss.backward()
+#         train_loss += loss.item()
+#         optimizer.step()
 
-        update_count += 1
+#         update_count += 1
 
-    return train_loss
+#     return train_loss
 
 
-def evaluate():
-    # Turn on evaluation mode
-    model.eval()
-    total_loss = 0.0
-    global update_count
-    task_unq_users = set()
-    valid_rec_all = []
+# def evaluate():
+#     # Turn on evaluation mode
+#     model.eval()
+#     total_loss = 0.0
+#     global update_count
+#     task_unq_users = set()
+#     valid_rec_all = []
 
-    with torch.no_grad():
-        for data_tensor, user_ids, item_ids in val_loader:
-            data_tensor, user_ids, item_ids = (
-                data_tensor.to(device),
-                user_ids.to(device),
-                item_ids.to(device),
-            )
-            if args.total_anneal_steps > 0:
-                anneal = min(
-                    args.anneal_cap, 1.0 * update_count / args.total_anneal_steps
-                )
-            else:
-                anneal = args.anneal_cap
+#     with torch.no_grad():
+#         for data_tensor, user_ids, item_ids in val_loader:
+#             data_tensor, user_ids, item_ids = (
+#                 data_tensor.to(device),
+#                 user_ids.to(device),
+#                 item_ids.to(device),
+#             )
+#             if args.total_anneal_steps > 0:
+#                 anneal = min(
+#                     args.anneal_cap, 1.0 * update_count / args.total_anneal_steps
+#                 )
+#             else:
+#                 anneal = args.anneal_cap
 
-            recon_batch, mu, logvar = model(data_tensor)
+#             recon_batch, mu, logvar = model(data_tensor)
 
-            loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
-            total_loss += loss.item()
+#             loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+#             total_loss += loss.item()
 
-            recon_batch = torch.gather(recon_batch, 1, item_ids)
+#             recon_batch = torch.gather(recon_batch, 1, item_ids)
 
-            task_unq_users = task_unq_users.union(set(user_ids.cpu().numpy()))
-            user_ids = user_ids.unsqueeze(1).repeat(1, item_ids.size(1))
+#             task_unq_users = task_unq_users.union(set(user_ids.cpu().numpy()))
+#             user_ids = user_ids.unsqueeze(1).repeat(1, item_ids.size(1))
 
-            valid_rec_all.append(
-                torch.cat(
-                    (
-                        user_ids.view(-1, 1),
-                        item_ids.view(-1, 1),
-                        recon_batch.view(-1, 1),
-                    ),
-                    dim=1,
-                )
-            )
+#             valid_rec_all.append(
+#                 torch.cat(
+#                     (
+#                         user_ids.view(-1, 1),
+#                         item_ids.view(-1, 1),
+#                         recon_batch.view(-1, 1),
+#                     ),
+#                     dim=1,
+#                 )
+#             )
 
-        valid_rec_all = torch.cat(valid_rec_all, dim=0).cpu().numpy()
-        valid_run_mf = get_run_mf_index(valid_rec_all, task_unq_users)
-        valid_res, _ = get_evaluations_final(valid_run_mf, valid_qrel)
-        return total_loss, valid_res
+#         valid_rec_all = torch.cat(valid_rec_all, dim=0).cpu().numpy()
+#         valid_run_mf = get_run_mf_index(valid_rec_all, task_unq_users)
+#         valid_res, _ = get_evaluations_final(valid_run_mf, valid_qrel)
+#         return total_loss, valid_res
 
 
 # best_ndcg10 = 0.0
