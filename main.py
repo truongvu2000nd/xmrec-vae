@@ -131,153 +131,153 @@ print(train_data.data.shape)
 # Build the model
 ###############################################################################
 
-# n_items = train_data.n_items
-# update_count = 0
+n_items = train_data.n_items
+update_count = 0
 
-# p_dims = [200, 600, n_items]
-# model = models.MultiVAE(p_dims).to(device)
+p_dims = [200, 600, n_items]
+model = models.MultiVAE(p_dims).to(device)
 
-# optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
-# criterion = models.loss_function
+optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
+criterion = models.loss_function
 
-# ###############################################################################
-# # Training code
-# ###############################################################################
-# def train():
-#     # Turn on training mode
-#     model.train()
-#     train_loss = 0.0
-#     global update_count
+###############################################################################
+# Training code
+###############################################################################
+def train():
+    # Turn on training mode
+    model.train()
+    train_loss = 0.0
+    global update_count
 
-#     for train_data in train_loader:
-#         train_data = train_data.to(device)
-#         if args.total_anneal_steps > 0:
-#             anneal = min(args.anneal_cap, 1.0 * update_count / args.total_anneal_steps)
-#         else:
-#             anneal = args.anneal_cap
+    for train_data in train_loader:
+        train_data = train_data.to(device)
+        if args.total_anneal_steps > 0:
+            anneal = min(args.anneal_cap, 1.0 * update_count / args.total_anneal_steps)
+        else:
+            anneal = args.anneal_cap
 
-#         optimizer.zero_grad()
-#         recon_batch, mu, logvar = model(train_data)
+        optimizer.zero_grad()
+        recon_batch, mu, logvar = model(train_data)
 
-#         loss = criterion(recon_batch, train_data, mu, logvar, anneal)
-#         loss.backward()
-#         train_loss += loss.item()
-#         optimizer.step()
+        loss = criterion(recon_batch, train_data, mu, logvar, anneal)
+        loss.backward()
+        train_loss += loss.item()
+        optimizer.step()
 
-#         update_count += 1
+        update_count += 1
 
-#     return train_loss
-
-
-# def evaluate():
-#     # Turn on evaluation mode
-#     model.eval()
-#     total_loss = 0.0
-#     global update_count
-#     task_unq_users = set()
-#     valid_rec_all = []
-
-#     with torch.no_grad():
-#         for data_tensor, user_ids, item_ids in val_loader:
-#             data_tensor, user_ids, item_ids = (
-#                 data_tensor.to(device),
-#                 user_ids.to(device),
-#                 item_ids.to(device),
-#             )
-#             if args.total_anneal_steps > 0:
-#                 anneal = min(
-#                     args.anneal_cap, 1.0 * update_count / args.total_anneal_steps
-#                 )
-#             else:
-#                 anneal = args.anneal_cap
-
-#             recon_batch, mu, logvar = model(data_tensor)
-
-#             loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
-#             total_loss += loss.item()
-
-#             recon_batch = torch.gather(recon_batch, 1, item_ids)
-
-#             task_unq_users = task_unq_users.union(set(user_ids.cpu().numpy()))
-#             user_ids = user_ids.unsqueeze(1).repeat(1, item_ids.size(1))
-
-#             valid_rec_all.append(
-#                 torch.cat(
-#                     (
-#                         user_ids.view(-1, 1),
-#                         item_ids.view(-1, 1),
-#                         recon_batch.view(-1, 1),
-#                     ),
-#                     dim=1,
-#                 )
-#             )
-
-#         valid_rec_all = torch.cat(valid_rec_all, dim=0).cpu().numpy()
-#         valid_run_mf = get_run_mf_index(valid_rec_all, task_unq_users)
-#         valid_res, _ = get_evaluations_final(valid_run_mf, valid_qrel)
-#         return total_loss, valid_res
+    return train_loss
 
 
-# best_ndcg10 = 0.0
-# try:
-#     for epoch in range(1, args.epochs + 1):
-#         train_loss = train()
-#         val_loss, ndcg10 = evaluate()
-#         ndcg10 = ndcg10["ndcg_cut_10"]
-#         print("-" * 89)
-#         print(
-#             f"Epoch {epoch} | train_loss: {train_loss} | val_loss: {val_loss} | ndcg@10: {ndcg10}"
-#         )
-#         print("-" * 89)
-#         if ndcg10 > best_ndcg10:
-#             torch.save(model.state_dict(), os.path.join("checkpoints", args.save))
-#             best_ndcg10 = ndcg10
+def evaluate():
+    # Turn on evaluation mode
+    model.eval()
+    total_loss = 0.0
+    global update_count
+    task_unq_users = set()
+    valid_rec_all = []
 
-# except KeyboardInterrupt:
-#     print("-" * 89)
-#     print("Exiting from training early")
+    with torch.no_grad():
+        for data_tensor, user_ids, item_ids in val_loader:
+            data_tensor, user_ids, item_ids = (
+                data_tensor.to(device),
+                user_ids.to(device),
+                item_ids.to(device),
+            )
+            if args.total_anneal_steps > 0:
+                anneal = min(
+                    args.anneal_cap, 1.0 * update_count / args.total_anneal_steps
+                )
+            else:
+                anneal = args.anneal_cap
 
-# print("=" * 89)
-# print(f"| End of training | Best ndcg@10: {best_ndcg10}")
-# print("=" * 89)
+            recon_batch, mu, logvar = model(data_tensor)
 
-# checkpoint = torch.load(os.path.join("checkpoints", args.save))
-# model.load_state_dict(checkpoint)
+            loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
+            total_loss += loss.item()
 
-# loaders = [val_loader, test_loader]
-# with torch.no_grad():
-#     for i, loader in enumerate(loaders):
-#         task_unq_users = set()
-#         rec_all = []
-#         for data_tensor, user_ids, item_ids in loader:
-#             data_tensor, user_ids, item_ids = (
-#                 data_tensor.to(device),
-#                 user_ids.to(device),
-#                 item_ids.to(device),
-#             )
-#             recon_batch, mu, logvar = model(data_tensor)
+            recon_batch = torch.gather(recon_batch, 1, item_ids)
 
-#             recon_batch = torch.gather(recon_batch, 1, item_ids)
+            task_unq_users = task_unq_users.union(set(user_ids.cpu().numpy()))
+            user_ids = user_ids.unsqueeze(1).repeat(1, item_ids.size(1))
 
-#             task_unq_users = task_unq_users.union(set(user_ids.cpu().numpy()))
-#             user_ids = user_ids.view(-1, 1).repeat(1, item_ids.size(1))
+            valid_rec_all.append(
+                torch.cat(
+                    (
+                        user_ids.view(-1, 1),
+                        item_ids.view(-1, 1),
+                        recon_batch.view(-1, 1),
+                    ),
+                    dim=1,
+                )
+            )
 
-#             rec_all.append(
-#                 torch.cat(
-#                     (
-#                         user_ids.view(-1, 1),
-#                         item_ids.view(-1, 1),
-#                         recon_batch.view(-1, 1),
-#                     ),
-#                     dim=1,
-#                 )
-#             )
+        valid_rec_all = torch.cat(valid_rec_all, dim=0).cpu().numpy()
+        valid_run_mf = get_run_mf_index(valid_rec_all, task_unq_users)
+        valid_res, _ = get_evaluations_final(valid_run_mf, valid_qrel)
+        return total_loss, valid_res
 
-#         rec_all = torch.cat(rec_all, dim=0).cpu().numpy()
-#         run_mf = get_run_mf(rec_all, task_unq_users, id_index_bank)
-#         if i == 0:
-#             output_file = f"output/{args.tgt_market}/valid_pred.tsv"
-#         else:
-#             output_file = f"output/{args.tgt_market}/test_pred.tsv"
-#         print(f"--Saving file: {output_file}")
-#         write_run_file(run_mf, output_file)
+
+best_ndcg10 = 0.0
+try:
+    for epoch in range(1, args.epochs + 1):
+        train_loss = train()
+        val_loss, ndcg10 = evaluate()
+        ndcg10 = ndcg10["ndcg_cut_10"]
+        print("-" * 89)
+        print(
+            f"Epoch {epoch} | train_loss: {train_loss} | val_loss: {val_loss} | ndcg@10: {ndcg10}"
+        )
+        print("-" * 89)
+        if ndcg10 > best_ndcg10:
+            torch.save(model.state_dict(), os.path.join("checkpoints", args.save))
+            best_ndcg10 = ndcg10
+
+except KeyboardInterrupt:
+    print("-" * 89)
+    print("Exiting from training early")
+
+print("=" * 89)
+print(f"| End of training | Best ndcg@10: {best_ndcg10}")
+print("=" * 89)
+
+checkpoint = torch.load(os.path.join("checkpoints", args.save))
+model.load_state_dict(checkpoint)
+
+loaders = [val_loader, test_loader]
+with torch.no_grad():
+    for i, loader in enumerate(loaders):
+        task_unq_users = set()
+        rec_all = []
+        for data_tensor, user_ids, item_ids in loader:
+            data_tensor, user_ids, item_ids = (
+                data_tensor.to(device),
+                user_ids.to(device),
+                item_ids.to(device),
+            )
+            recon_batch, mu, logvar = model(data_tensor)
+
+            recon_batch = torch.gather(recon_batch, 1, item_ids)
+
+            task_unq_users = task_unq_users.union(set(user_ids.cpu().numpy()))
+            user_ids = user_ids.view(-1, 1).repeat(1, item_ids.size(1))
+
+            rec_all.append(
+                torch.cat(
+                    (
+                        user_ids.view(-1, 1),
+                        item_ids.view(-1, 1),
+                        recon_batch.view(-1, 1),
+                    ),
+                    dim=1,
+                )
+            )
+
+        rec_all = torch.cat(rec_all, dim=0).cpu().numpy()
+        run_mf = get_run_mf(rec_all, task_unq_users, id_index_bank)
+        if i == 0:
+            output_file = f"output/{args.tgt_market}/valid_pred.tsv"
+        else:
+            output_file = f"output/{args.tgt_market}/test_pred.tsv"
+        print(f"--Saving file: {output_file}")
+        write_run_file(run_mf, output_file)
