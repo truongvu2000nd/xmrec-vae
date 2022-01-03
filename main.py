@@ -121,6 +121,8 @@ test_loader = torch.utils.data.DataLoader(
     test_data, batch_size=args.batch_size, shuffle=False, collate_fn=run_batch_collate
 )
 
+print(train_data.data.shape)
+
 ###############################################################################
 # Build the model
 ###############################################################################
@@ -212,66 +214,66 @@ def evaluate():
         return total_loss, valid_res
 
 
-best_ndcg10 = 0.0
-try:
-    for epoch in range(1, args.epochs + 1):
-        train_loss = train()
-        val_loss, ndcg10 = evaluate()
-        ndcg10 = ndcg10["ndcg_cut_10"]
-        print("-" * 89)
-        print(
-            f"Epoch {epoch} | train_loss: {train_loss} | val_loss: {val_loss} | ndcg@10: {ndcg10}"
-        )
-        print("-" * 89)
-        if ndcg10 > best_ndcg10:
-            torch.save(model.state_dict(), os.path.join("checkpoints", args.save))
-            best_ndcg10 = ndcg10
+# best_ndcg10 = 0.0
+# try:
+#     for epoch in range(1, args.epochs + 1):
+#         train_loss = train()
+#         val_loss, ndcg10 = evaluate()
+#         ndcg10 = ndcg10["ndcg_cut_10"]
+#         print("-" * 89)
+#         print(
+#             f"Epoch {epoch} | train_loss: {train_loss} | val_loss: {val_loss} | ndcg@10: {ndcg10}"
+#         )
+#         print("-" * 89)
+#         if ndcg10 > best_ndcg10:
+#             torch.save(model.state_dict(), os.path.join("checkpoints", args.save))
+#             best_ndcg10 = ndcg10
 
-except KeyboardInterrupt:
-    print("-" * 89)
-    print("Exiting from training early")
+# except KeyboardInterrupt:
+#     print("-" * 89)
+#     print("Exiting from training early")
 
-print("=" * 89)
-print(f"| End of training | Best ndcg@10: {best_ndcg10}")
-print("=" * 89)
+# print("=" * 89)
+# print(f"| End of training | Best ndcg@10: {best_ndcg10}")
+# print("=" * 89)
 
-checkpoint = torch.load(os.path.join("checkpoints", args.save))
-model.load_state_dict(checkpoint)
+# checkpoint = torch.load(os.path.join("checkpoints", args.save))
+# model.load_state_dict(checkpoint)
 
-loaders = [val_loader, test_loader]
-with torch.no_grad():
-    for i, loader in enumerate(loaders):
-        task_unq_users = set()
-        rec_all = []
-        for data_tensor, user_ids, item_ids in loader:
-            data_tensor, user_ids, item_ids = (
-                data_tensor.to(device),
-                user_ids.to(device),
-                item_ids.to(device),
-            )
-            recon_batch, mu, logvar = model(data_tensor)
+# loaders = [val_loader, test_loader]
+# with torch.no_grad():
+#     for i, loader in enumerate(loaders):
+#         task_unq_users = set()
+#         rec_all = []
+#         for data_tensor, user_ids, item_ids in loader:
+#             data_tensor, user_ids, item_ids = (
+#                 data_tensor.to(device),
+#                 user_ids.to(device),
+#                 item_ids.to(device),
+#             )
+#             recon_batch, mu, logvar = model(data_tensor)
 
-            recon_batch = torch.gather(recon_batch, 1, item_ids)
+#             recon_batch = torch.gather(recon_batch, 1, item_ids)
 
-            task_unq_users = task_unq_users.union(set(user_ids.cpu().numpy()))
-            user_ids = user_ids.view(-1, 1).repeat(1, item_ids.size(1))
+#             task_unq_users = task_unq_users.union(set(user_ids.cpu().numpy()))
+#             user_ids = user_ids.view(-1, 1).repeat(1, item_ids.size(1))
 
-            rec_all.append(
-                torch.cat(
-                    (
-                        user_ids.view(-1, 1),
-                        item_ids.view(-1, 1),
-                        recon_batch.view(-1, 1),
-                    ),
-                    dim=1,
-                )
-            )
+#             rec_all.append(
+#                 torch.cat(
+#                     (
+#                         user_ids.view(-1, 1),
+#                         item_ids.view(-1, 1),
+#                         recon_batch.view(-1, 1),
+#                     ),
+#                     dim=1,
+#                 )
+#             )
 
-        rec_all = torch.cat(rec_all, dim=0).cpu().numpy()
-        run_mf = get_run_mf(rec_all, task_unq_users, id_index_bank)
-        if i == 0:
-            output_file = f"output/{args.tgt_market}/valid_pred.tsv"
-        else:
-            output_file = f"output/{args.tgt_market}/test_pred.tsv"
-        print(f"--Saving file: {output_file}")
-        write_run_file(run_mf, output_file)
+#         rec_all = torch.cat(rec_all, dim=0).cpu().numpy()
+#         run_mf = get_run_mf(rec_all, task_unq_users, id_index_bank)
+#         if i == 0:
+#             output_file = f"output/{args.tgt_market}/valid_pred.tsv"
+#         else:
+#             output_file = f"output/{args.tgt_market}/test_pred.tsv"
+#         print(f"--Saving file: {output_file}")
+#         write_run_file(run_mf, output_file)
