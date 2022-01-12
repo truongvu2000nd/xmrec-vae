@@ -137,6 +137,7 @@ print(model)
 
 optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
 criterion = models.loss_function
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [30, 60, 90], gamma=0.5, last_epoch=-1, verbose=True)
 
 ###############################################################################
 # Training code
@@ -163,6 +164,7 @@ def train():
         optimizer.step()
 
         update_count += 1
+    scheduler.step()
 
     return train_loss
 
@@ -248,7 +250,7 @@ with torch.no_grad():
     for i, loader in enumerate(loaders):
         task_unq_users = set()
         rec_all = []
-        for (data_tensor, market_class), user_ids, item_ids in val_loader:
+        for data_tensor, market_class, user_ids, item_ids in val_loader:
             data_tensor, market_class, user_ids, item_ids = (
                 data_tensor.to(device),
                 market_class.to(device),
