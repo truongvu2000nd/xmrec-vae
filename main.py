@@ -41,7 +41,7 @@ def create_arg_parser():
     
     parser.add_argument('--train_file', help='the file name of the train data',type=str, default='train_5core.tsv')
     parser.add_argument('--valid_qrel', help='specify validation run file for target market', type=str, default='valid_qrel.tsv')
-    
+    parser.add_argument('--conditional', action='store_true', help='use cvae')
     # MODEL arguments 
     parser.add_argument('--lr', type=float, default=1e-3,
                     help='initial learning rate')
@@ -111,8 +111,7 @@ train_data = MarketTrainDataset(tgt_file, id_index_bank, src_files=src_files)
 train_loader = torch.utils.data.DataLoader(
     train_data,
     batch_size=args.batch_size,
-    shuffle=False,
-    # collate_fn=train_batch_collate,
+    shuffle=True,
 )
 
 val_data = MarketRunDataset(train_data, run_valid_file, id_index_bank)
