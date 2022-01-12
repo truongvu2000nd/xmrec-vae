@@ -132,7 +132,7 @@ n_items = train_data.n_items
 update_count = 0
 
 p_dims = [200, 600, n_items]
-model = models.MultiVAE(p_dims, conditional=True, num_labels=1+len(src_market_list)).to(device)
+model = models.MultiVAE(p_dims, conditional=args.conditional, num_labels=1+len(src_market_list)).to(device)
 print(model)
 
 optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
@@ -228,7 +228,6 @@ try:
             f"Epoch {epoch} | train_loss: {train_loss} | val_loss: {val_loss} | ndcg@10: {ndcg10}"
         )
         print("-" * 89)
-        exit(0)
         if ndcg10 > best_ndcg10:
             torch.save(model.state_dict(), os.path.join("checkpoints", args.save))
             best_ndcg10 = ndcg10
