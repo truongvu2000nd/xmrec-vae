@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 import numpy as np
+from .utils import idx2onehot
 
 
 class MultiDAE(nn.Module):
@@ -62,7 +63,7 @@ class MultiVAE(nn.Module):
     https://arxiv.org/abs/1802.05814
     """
 
-    def __init__(self, p_dims, q_dims=None, dropout=0.5):
+    def __init__(self, p_dims, q_dims=None, dropout=0.5, conditional=False, num_labels=0):
         super(MultiVAE, self).__init__()
         self.p_dims = p_dims
         if q_dims:
@@ -71,6 +72,13 @@ class MultiVAE(nn.Module):
             self.q_dims = q_dims
         else:
             self.q_dims = p_dims[::-1]
+
+        self.conditional = conditional
+        self.num_labels = num_labels
+        if conditional:
+            assert num_labels > 0
+            self.q_dims[0] += num_labels
+            self.p_dims[0] += num_labels
 
         # Last dimension of q- network is for mean and variance
         temp_q_dims = self.q_dims[:-1] + [self.q_dims[-1] * 2]
@@ -82,14 +90,16 @@ class MultiVAE(nn.Module):
         self.drop = nn.Dropout(dropout)
         self.init_weights()
     
-    def forward(self, input):
-        mu, logvar = self.encode(input)
+    def forward(self, input, c=None):
+        mu, logvar = self.encode(input, c)
         z = self.reparameterize(mu, logvar)
-        return self.decode(z), mu, logvar
+        return self.decode(z, c), mu, logvar
     
-    def encode(self, input):
-        h = F.normalize(input)
-        h = self.drop(h)
+    def encode(self, input, c=None):
+        h = self.drop(input)
+        if self.conditional:
+            c = idx2onehot(c, n=self.num_labels)
+            h = torch.cat((h, c), dim=-1)
         
         for i, layer in enumerate(self.q_layers):
             h = layer(h)
@@ -108,8 +118,11 @@ class MultiVAE(nn.Module):
         else:
             return mu
     
-    def decode(self, z):
+    def decode(self, z, c=None):
         h = z
+        if self.conditional:
+            c = idx2onehot(c, n=self.num_labels)
+            h = torch.cat((h, c), dim=-1)
         for i, layer in enumerate(self.p_layers):
             h = layer(h)
             if i != len(self.p_layers) - 1:
@@ -146,3 +159,14 @@ def loss_function(recon_x, x, mu, logvar, anneal=1.0):
     KLD = -0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1))
 
     return BCE + anneal * KLD
+
+
+if __name__ == '__main__':
+    model = MultiVAE([200, 600, 1200], conditional=True, num_labels=10)
+    print(model)
+    x = torch.randn(3, 1200)
+    c = torch.ones((3, 1), dtype=torch.int64)
+    
+    print(model(x, c)[0].size())
+    print(model(x, c)[1].size())
+    print(model(x, c)[2].size())

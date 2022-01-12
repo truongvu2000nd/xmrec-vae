@@ -12,6 +12,18 @@ import random
 from .evaluation import Evaluator
 
 
+def idx2onehot(idx, n):
+
+    assert torch.max(idx).item() < n
+
+    if idx.dim() == 1:
+        idx = idx.unsqueeze(1)
+    onehot = torch.zeros(idx.size(0), n).to(idx.device)
+    onehot.scatter_(1, idx, 1)
+    
+    return onehot
+
+
 def set_seed(args):
     random.seed(args.seed)
     torch.manual_seed(args.seed)

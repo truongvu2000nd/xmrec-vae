@@ -17,12 +17,20 @@ def load_n_items(tgt_file, run_valid_file, src_files=None):
     tgt_data = pd.read_csv(tgt_file, sep="\t")
     for item_id in tgt_data["itemId"]:
         id_index_bank.query_item_index(item_id)
+    for user_id in tgt_data["userId"]:
+        user_index = id_index_bank.query_user_index(user_id)
+        id_index_bank.query_user_market(user_index, market=0)
 
     if src_files is not None:
+        market = 1
         for src_file in src_files:
             src_data = pd.read_csv(src_file, sep="\t")
             for item_id in src_data["itemId"]:
                 id_index_bank.query_item_index(item_id)
+            for user_id in src_data["userId"]:
+                user_index = id_index_bank.query_user_index(user_id)
+                id_index_bank.query_user_market(user_index, market=market)
+            market += 1
 
     run_files = [run_valid_file]
     for run_file in run_files:
@@ -43,6 +51,7 @@ class Central_ID_Bank(object):
     def __init__(self):
         self.user_id_index = {}
         self.item_id_index = {}
+        self.user_market = {}
         self.last_user_index = 0
         self.last_item_index = 0
 
@@ -74,16 +83,27 @@ class Central_ID_Bank(object):
             print(f"ITEM index {item_index} is not valid!")
             return "yyyyy"
 
+    def query_user_market(self, user_index, market=0):
+        if user_index not in self.user_market:
+            self.user_market[user_index] = market
+        return self.user_market[user_index]
+
 
 class MarketTrainDataset(Dataset):
     def __init__(self, tgt_file, id_index_bank, src_files=None) -> None:
         self.id_index_bank = id_index_bank
         self.ratings = pd.read_csv(tgt_file, sep="\t")
+        
         if src_files is not None:
             for src_file in src_files:
-                self.ratings = self.ratings.append(pd.read_csv(src_file, sep="\t"))
+                src_ratings = pd.read_csv(src_file, sep="\t")
+                self.ratings = self.ratings.append(src_ratings)
 
         # replace ids with corrosponding index for both users and items
+        # self.market = self.ratings["userId"].apply(
+        #     lambda x: self.id_index_bank.query_user_index(x)
+        # ).values
+
         self.ratings["userId"] = self.ratings["userId"].apply(
             lambda x: self.id_index_bank.query_user_index(x)
         )
@@ -92,14 +112,15 @@ class MarketTrainDataset(Dataset):
         )
         self.n_items = id_index_bank.last_item_index
         self.n_users = id_index_bank.last_user_index
+        self.market = np.array([self.id_index_bank.query_user_market(x) for x in range(self.n_users)]).reshape(-1, 1)
 
         rows, cols = self.ratings["userId"], self.ratings["itemId"]
         self.data = csr_matrix((np.ones_like(rows),
-                        (rows, cols)), dtype='float64',
-                        shape=(self.n_users, self.n_items))
+                        (rows, cols)), dtype='float32',
+                        shape=(self.n_users, self.n_items)).toarray()
 
     def __getitem__(self, index:int):
-        return self.data[index]
+        return (self.data[index], self.market[index])
 
     def __len__(self):
         return self.n_users
@@ -130,7 +151,7 @@ class MarketRunDataset(Dataset):
         self.items = np.array(items)
 
     def __getitem__(self, index):
-        return self.train_data[self.users[index]], self.users[index], self.items[index]
+        return (*self.train_data[self.users[index]], self.users[index], self.items[index])
 
     def __len__(self):
         return self.users.shape[0]
@@ -152,17 +173,21 @@ def sparse_coo_to_tensor(coo: coo_matrix):
 
 
 def train_batch_collate(batch):
-    batch = torch.FloatTensor(vstack(batch).toarray())
+    x, y = zip(*batch)
+    x = torch.FloatTensor(vstack(x).toarray())
+    print(y)
+    y = torch.LongTensor(vstack(y))
     return batch
     
 
 def run_batch_collate(batch: list): 
-    data_batch, users_batch, items_batch = zip(*batch)
+    data_batch, market_class, users_batch, items_batch = zip(*batch)
     data_batch = torch.FloatTensor(vstack(data_batch).toarray())
+    market_class = torch.LongTensor(vstack(market_class))
 
     users_batch = torch.LongTensor(np.array(users_batch))
     items_batch = torch.LongTensor(np.array(items_batch))
-    return data_batch, users_batch, items_batch
+    return data_batch, market_class, users_batch, items_batch
 
 
 if __name__ == '__main__':

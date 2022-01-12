@@ -111,21 +111,19 @@ train_data = MarketTrainDataset(tgt_file, id_index_bank, src_files=src_files)
 train_loader = torch.utils.data.DataLoader(
     train_data,
     batch_size=args.batch_size,
-    shuffle=True,
-    collate_fn=train_batch_collate,
+    shuffle=False,
+    # collate_fn=train_batch_collate,
 )
 
 val_data = MarketRunDataset(train_data, run_valid_file, id_index_bank)
 val_loader = torch.utils.data.DataLoader(
-    val_data, batch_size=args.batch_size, shuffle=False, collate_fn=run_batch_collate
+    val_data, batch_size=args.batch_size, shuffle=False
 )
 
 test_data = MarketRunDataset(train_data, run_test_file, id_index_bank,)
 test_loader = torch.utils.data.DataLoader(
-    test_data, batch_size=args.batch_size, shuffle=False, collate_fn=run_batch_collate
+    test_data, batch_size=args.batch_size, shuffle=False, 
 )
-
-print(train_data.data.shape)
 
 ###############################################################################
 # Build the model
@@ -135,7 +133,8 @@ n_items = train_data.n_items
 update_count = 0
 
 p_dims = [200, 600, n_items]
-model = models.MultiVAE(p_dims).to(device)
+model = models.MultiVAE(p_dims, conditional=True, num_labels=1+len(src_market_list)).to(device)
+print(model)
 
 optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
 criterion = models.loss_function
@@ -149,15 +148,15 @@ def train():
     train_loss = 0.0
     global update_count
 
-    for train_data in train_loader:
-        train_data = train_data.to(device)
+    for train_data, market_class in train_loader:
+        train_data, market_class = train_data.to(device), market_class.to(device)
         if args.total_anneal_steps > 0:
             anneal = min(args.anneal_cap, 1.0 * update_count / args.total_anneal_steps)
         else:
             anneal = args.anneal_cap
 
         optimizer.zero_grad()
-        recon_batch, mu, logvar = model(train_data)
+        recon_batch, mu, logvar = model(train_data, c=market_class)
 
         loss = criterion(recon_batch, train_data, mu, logvar, anneal)
         loss.backward()
@@ -178,9 +177,10 @@ def evaluate():
     valid_rec_all = []
 
     with torch.no_grad():
-        for data_tensor, user_ids, item_ids in val_loader:
-            data_tensor, user_ids, item_ids = (
+        for data_tensor, market_class, user_ids, item_ids in val_loader:
+            data_tensor, market_class, user_ids, item_ids = (
                 data_tensor.to(device),
+                market_class.to(device),
                 user_ids.to(device),
                 item_ids.to(device),
             )
@@ -191,7 +191,7 @@ def evaluate():
             else:
                 anneal = args.anneal_cap
 
-            recon_batch, mu, logvar = model(data_tensor)
+            recon_batch, mu, logvar = model(data_tensor, market_class)
 
             loss = criterion(recon_batch, data_tensor, mu, logvar, anneal)
             total_loss += loss.item()
@@ -229,6 +229,7 @@ try:
             f"Epoch {epoch} | train_loss: {train_loss} | val_loss: {val_loss} | ndcg@10: {ndcg10}"
         )
         print("-" * 89)
+        exit(0)
         if ndcg10 > best_ndcg10:
             torch.save(model.state_dict(), os.path.join("checkpoints", args.save))
             best_ndcg10 = ndcg10
@@ -249,9 +250,10 @@ with torch.no_grad():
     for i, loader in enumerate(loaders):
         task_unq_users = set()
         rec_all = []
-        for data_tensor, user_ids, item_ids in loader:
-            data_tensor, user_ids, item_ids = (
+        for (data_tensor, market_class), user_ids, item_ids in val_loader:
+            data_tensor, market_class, user_ids, item_ids = (
                 data_tensor.to(device),
+                market_class.to(device),
                 user_ids.to(device),
                 item_ids.to(device),
             )
