@@ -257,7 +257,7 @@ with torch.no_grad():
                 user_ids.to(device),
                 item_ids.to(device),
             )
-            recon_batch, mu, logvar = model(data_tensor)
+            recon_batch, mu, logvar = model(data_tensor, market_class)
 
             recon_batch = torch.gather(recon_batch, 1, item_ids)
 
