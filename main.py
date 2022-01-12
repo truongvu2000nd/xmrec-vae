@@ -34,7 +34,6 @@ def create_arg_parser():
     parser.add_argument('--data_dir', help='dataset directory', type=str, default='DATA/')
     parser.add_argument('--tgt_market', help='specify a target market name', type=str, default='t1') 
     parser.add_argument('--src_markets', help='specify none ("") or a few source markets ("-" seperated) to augment the data for training', type=str, default='') 
-    parser.add_argument('--use_processed_data', action='store_true', help='in exp')
     
     parser.add_argument('--valid_file', help='specify validation run file for target market', type=str, default='valid_run.tsv')
     parser.add_argument('--test_file', help='specify test run file for target market', type=str, default='test_run.tsv') 
@@ -137,7 +136,7 @@ print(model)
 
 optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=args.wd)
 criterion = models.loss_function
-scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [30, 60, 90], gamma=0.5, last_epoch=-1, verbose=True)
+scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [60, 120, 180], gamma=0.2, last_epoch=-1, verbose=True)
 
 ###############################################################################
 # Training code
