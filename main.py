@@ -250,7 +250,7 @@ with torch.no_grad():
     for i, loader in enumerate(loaders):
         task_unq_users = set()
         rec_all = []
-        for data_tensor, market_class, user_ids, item_ids in val_loader:
+        for data_tensor, market_class, user_ids, item_ids in loader:
             data_tensor, market_class, user_ids, item_ids = (
                 data_tensor.to(device),
                 market_class.to(device),
